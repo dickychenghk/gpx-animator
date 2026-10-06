@@ -16,9 +16,14 @@
 package app.gpx_animator.ui.swing;
 
 import app.gpx_animator.core.Option;
+import app.gpx_animator.core.UserException;
 import app.gpx_animator.core.configuration.TrackConfiguration;
 import app.gpx_animator.core.data.TrackIcon;
+import app.gpx_animator.core.data.gpx.GpxParser;
 import app.gpx_animator.core.preferences.Preferences;
+import app.gpx_animator.core.util.DateUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -28,7 +33,10 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.JTextArea;
+import javax.swing.SpinnerDateModel;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingConstants;
+import javax.swing.SwingWorker;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
@@ -39,12 +47,24 @@ import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.Serial;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.ResourceBundle;
+import java.util.TimeZone;
+import java.util.concurrent.ExecutionException;
 
 import static javax.swing.JFileChooser.FILES_ONLY;
 
@@ -52,6 +72,14 @@ abstract class TrackSettingsPanel extends JPanel {
 
     @Serial
     private static final long serialVersionUID = 2492074184123083022L;
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(TrackSettingsPanel.class);
+
+    private static final TimeZone UTC_TIME_ZONE = TimeZone.getTimeZone(ZoneOffset.UTC);
+    private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm:ss"; //NON-NLS
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern(DATE_TIME_PATTERN, Locale.ROOT);
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT); //NON-NLS
+    private static final int TIME_ZONE_POPUP_ROWS = 20;
 
     private final transient ResourceBundle resourceBundle = Preferences.getResourceBundle();
 
@@ -73,6 +101,20 @@ abstract class TrackSettingsPanel extends JPanel {
     private final FileSelector trackEndIconFileSelector;
     private final JCheckBox trackEndMirrorCheckBox;
 
+    private final JLabel gpxTimeRangeLabel;
+    private final JComboBox<TimeZoneItem> timeZoneComboBox;
+    private final JCheckBox timeRangeFromCheckBox;
+    private final JSpinner timeRangeFromSpinner;
+    private final JCheckBox timeRangeToCheckBox;
+    private final JSpinner timeRangeToSpinner;
+
+    private boolean timeRangeFromValueSet;
+    private boolean timeRangeToValueSet;
+    private transient TimeRangeStatus timeRangeStatus = TimeRangeStatus.NO_FILE;
+    private transient GpxParser.TimeRange detectedTimeRange;
+    private transient SwingWorker<Optional<GpxParser.TimeRange>, Void> timeRangeReader;
+    private transient int timeRangeReaderGeneration;
+
     @SuppressWarnings({
             "checkstyle:MethodLength", // TODO Refactor when doing the redesign task https://github.com/gpx-animator/gpx-animator/issues/60
             "PMD.AssignmentInOperand", // assignment in operand is intentional
@@ -84,9 +126,9 @@ abstract class TrackSettingsPanel extends JPanel {
         final var gblContentPane = new GridBagLayout();
         gblContentPane.columnWidths = new int[]{0, 0, 0};
         gblContentPane.columnWeights = new double[]{0.0, 1.0, Double.MIN_VALUE};
-        gblContentPane.rowHeights = new int[]{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        gblContentPane.rowHeights = new int[]{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
         gblContentPane.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, Double.MIN_VALUE};
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, Double.MIN_VALUE};
         setLayout(gblContentPane);
         var rowCounter = 0;
 
@@ -117,6 +159,83 @@ abstract class TrackSettingsPanel extends JPanel {
         gbcInputGpxFileSelector.gridx = 1;
         gbcInputGpxFileSelector.gridy = rowCounter;
         add(inputGpxFileSelector, gbcInputGpxFileSelector);
+
+        final var lblGpxTimeRange = new JLabel(resourceBundle.getString("ui.panel.tracksettings.timerange.label"));
+        final var gbcLabelGpxTimeRange = new GridBagConstraints();
+        gbcLabelGpxTimeRange.anchor = GridBagConstraints.LINE_END;
+        gbcLabelGpxTimeRange.insets = new Insets(0, 0, 5, 5);
+        gbcLabelGpxTimeRange.gridx = 0;
+        gbcLabelGpxTimeRange.gridy = ++rowCounter;
+        add(lblGpxTimeRange, gbcLabelGpxTimeRange);
+
+        gpxTimeRangeLabel = new JLabel();
+        lblGpxTimeRange.setLabelFor(gpxTimeRangeLabel);
+        final var gbcGpxTimeRangeLabel = new GridBagConstraints();
+        gbcGpxTimeRangeLabel.anchor = GridBagConstraints.LINE_START;
+        gbcGpxTimeRangeLabel.fill = GridBagConstraints.HORIZONTAL;
+        gbcGpxTimeRangeLabel.insets = new Insets(0, 0, 5, 0);
+        gbcGpxTimeRangeLabel.gridx = 1;
+        gbcGpxTimeRangeLabel.gridy = rowCounter;
+        add(gpxTimeRangeLabel, gbcGpxTimeRangeLabel);
+
+        final var lblTimeZone = new JLabel(resourceBundle.getString("ui.panel.tracksettings.timezone.label"));
+        final var gbcLabelTimeZone = new GridBagConstraints();
+        gbcLabelTimeZone.anchor = GridBagConstraints.LINE_END;
+        gbcLabelTimeZone.insets = new Insets(0, 0, 5, 5);
+        gbcLabelTimeZone.gridx = 0;
+        gbcLabelTimeZone.gridy = ++rowCounter;
+        add(lblTimeZone, gbcLabelTimeZone);
+
+        timeZoneComboBox = new JComboBox<>(createTimeZoneItems());
+        timeZoneComboBox.setToolTipText(Option.TIME_RANGE_ZONE.getHelp());
+        timeZoneComboBox.setMaximumRowCount(TIME_ZONE_POPUP_ROWS);
+        lblTimeZone.setLabelFor(timeZoneComboBox);
+        selectTimeZone(ZoneId.systemDefault());
+        final var gbcTimeZoneComboBox = new GridBagConstraints();
+        gbcTimeZoneComboBox.fill = GridBagConstraints.HORIZONTAL;
+        gbcTimeZoneComboBox.insets = new Insets(0, 0, 5, 0);
+        gbcTimeZoneComboBox.gridx = 1;
+        gbcTimeZoneComboBox.gridy = rowCounter;
+        add(timeZoneComboBox, gbcTimeZoneComboBox);
+        timeZoneComboBox.setPreferredSize(new Dimension(10, timeZoneComboBox.getPreferredSize().height));
+
+        timeRangeFromCheckBox = new JCheckBox(resourceBundle.getString("ui.panel.tracksettings.timerangefrom.label"));
+        timeRangeFromCheckBox.setHorizontalTextPosition(SwingConstants.LEADING);
+        timeRangeFromCheckBox.setToolTipText(Option.TIME_RANGE_FROM.getHelp());
+        final var gbcTimeRangeFromCheckBox = new GridBagConstraints();
+        gbcTimeRangeFromCheckBox.anchor = GridBagConstraints.LINE_END;
+        gbcTimeRangeFromCheckBox.insets = new Insets(0, 0, 5, 5);
+        gbcTimeRangeFromCheckBox.gridx = 0;
+        gbcTimeRangeFromCheckBox.gridy = ++rowCounter;
+        add(timeRangeFromCheckBox, gbcTimeRangeFromCheckBox);
+
+        timeRangeFromSpinner = createDateTimeSpinner();
+        timeRangeFromSpinner.setToolTipText(Option.TIME_RANGE_FROM.getHelp());
+        final var gbcTimeRangeFromSpinner = new GridBagConstraints();
+        gbcTimeRangeFromSpinner.fill = GridBagConstraints.HORIZONTAL;
+        gbcTimeRangeFromSpinner.insets = new Insets(0, 0, 5, 0);
+        gbcTimeRangeFromSpinner.gridx = 1;
+        gbcTimeRangeFromSpinner.gridy = rowCounter;
+        add(timeRangeFromSpinner, gbcTimeRangeFromSpinner);
+
+        timeRangeToCheckBox = new JCheckBox(resourceBundle.getString("ui.panel.tracksettings.timerangeto.label"));
+        timeRangeToCheckBox.setHorizontalTextPosition(SwingConstants.LEADING);
+        timeRangeToCheckBox.setToolTipText(Option.TIME_RANGE_TO.getHelp());
+        final var gbcTimeRangeToCheckBox = new GridBagConstraints();
+        gbcTimeRangeToCheckBox.anchor = GridBagConstraints.LINE_END;
+        gbcTimeRangeToCheckBox.insets = new Insets(0, 0, 5, 5);
+        gbcTimeRangeToCheckBox.gridx = 0;
+        gbcTimeRangeToCheckBox.gridy = ++rowCounter;
+        add(timeRangeToCheckBox, gbcTimeRangeToCheckBox);
+
+        timeRangeToSpinner = createDateTimeSpinner();
+        timeRangeToSpinner.setToolTipText(Option.TIME_RANGE_TO.getHelp());
+        final var gbcTimeRangeToSpinner = new GridBagConstraints();
+        gbcTimeRangeToSpinner.fill = GridBagConstraints.HORIZONTAL;
+        gbcTimeRangeToSpinner.insets = new Insets(0, 0, 5, 0);
+        gbcTimeRangeToSpinner.gridx = 1;
+        gbcTimeRangeToSpinner.gridy = rowCounter;
+        add(timeRangeToSpinner, gbcTimeRangeToSpinner);
 
         final var lblLabel = new JLabel(resourceBundle.getString("ui.panel.tracksettings.label.label"));
         final var gbcLabelLabel = new GridBagConstraints();
@@ -477,6 +596,35 @@ abstract class TrackSettingsPanel extends JPanel {
         travelMirrorCheckBox.addChangeListener(changeListener);
         trackEndIconComboBox.addItemListener(itemListener);
         trackEndMirrorCheckBox.addChangeListener(changeListener);
+
+        inputGpxFileSelector.addPropertyChangeListener(FileSelector.PROPERTY_FILENAME, evt -> readGpxTimeRange());
+        timeZoneComboBox.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED) {
+                timeRangeChanged();
+            }
+        });
+        timeRangeFromCheckBox.addItemListener(e -> {
+            if (timeRangeFromCheckBox.isSelected() && !timeRangeFromValueSet && timeRangeStatus == TimeRangeStatus.DETECTED) {
+                timeRangeFromSpinner.setValue(epochToSpinnerValue(detectedTimeRange.first()));
+            }
+            timeRangeFromSpinner.setEnabled(timeRangeFromCheckBox.isSelected());
+            timeRangeChanged();
+        });
+        timeRangeFromSpinner.addChangeListener(e -> {
+            timeRangeFromValueSet = true;
+            timeRangeChanged();
+        });
+        timeRangeToCheckBox.addItemListener(e -> {
+            if (timeRangeToCheckBox.isSelected() && !timeRangeToValueSet && timeRangeStatus == TimeRangeStatus.DETECTED) {
+                timeRangeToSpinner.setValue(epochToSpinnerValue(detectedTimeRange.last()));
+            }
+            timeRangeToSpinner.setEnabled(timeRangeToCheckBox.isSelected());
+            timeRangeChanged();
+        });
+        timeRangeToSpinner.addChangeListener(e -> {
+            timeRangeToValueSet = true;
+            timeRangeChanged();
+        });
     }
 
     public static void configureGpxFileChooser(final ResourceBundle resourceBundle, final JFileChooser fileChooser) {
@@ -534,6 +682,7 @@ abstract class TrackSettingsPanel extends JPanel {
 
     public TrackConfiguration createConfiguration() {
         final var b = TrackConfiguration.createBuilder();
+        final var zone = getSelectedZone();
 
         b.inputGpx(new File(inputGpxFileSelector.getFilename()))
                 .label(labelTextField.getText())
@@ -545,6 +694,9 @@ abstract class TrackSettingsPanel extends JPanel {
                 .timeOffset((Long) timeOffsetSpinner.getValue())
                 .trimGpxStart((Long) trimGpxStartSpinner.getValue())
                 .trimGpxEnd((Long) trimGpxEndSpinner.getValue())
+                .timeRangeZone(zone.getId())
+                .timeRangeFrom(getTimeRangeMillis(timeRangeFromCheckBox, timeRangeFromSpinner, zone))
+                .timeRangeTo(getTimeRangeMillis(timeRangeToCheckBox, timeRangeToSpinner, zone))
                 .trackIcon((TrackIcon) travelIconComboBox.getSelectedItem())
                 .inputIcon(new File(travelIconFileSelector.getFilename()))
                 .mirrorTrackIcon(travelMirrorCheckBox.isSelected())
@@ -566,6 +718,10 @@ abstract class TrackSettingsPanel extends JPanel {
         timeOffsetSpinner.setValue(c.getTimeOffset());
         trimGpxStartSpinner.setValue(c.getTrimGpxStart());
         trimGpxEndSpinner.setValue(c.getTrimGpxEnd());
+        final var zone = DateUtil.toZoneIdOrDefault(c.getTimeRangeZone());
+        selectTimeZone(zone);
+        setTimeRangeValue(timeRangeFromCheckBox, timeRangeFromSpinner, c.getTimeRangeFrom(), zone);
+        setTimeRangeValue(timeRangeToCheckBox, timeRangeToSpinner, c.getTimeRangeTo(), zone);
         travelIconComboBox.setSelectedItem(c.getTrackIcon());
         travelIconFileSelector.setFilename(c.getInputIcon() == null ? null : c.getInputIcon().toString());
         travelMirrorCheckBox.setSelected(c.isTrackIconMirrored());
@@ -575,9 +731,200 @@ abstract class TrackSettingsPanel extends JPanel {
         labelChanged(c.getLabel());
     }
 
+    private void readGpxTimeRange() {
+        if (timeRangeReader != null) {
+            timeRangeReader.cancel(true);
+        }
+        timeRangeReaderGeneration++;
+        final var generation = timeRangeReaderGeneration;
+
+        final var filename = inputGpxFileSelector.getFilename();
+        if (filename == null || filename.isBlank() || !new File(filename).isFile()) {
+            timeRangeStatus = TimeRangeStatus.NO_FILE;
+            updateTimeRangeLabel();
+            return;
+        }
+
+        final var gpxFile = new File(filename);
+        timeRangeStatus = TimeRangeStatus.READING;
+        updateTimeRangeLabel();
+
+        final var worker = new SwingWorker<Optional<GpxParser.TimeRange>, Void>() {
+            @Override
+            protected Optional<GpxParser.TimeRange> doInBackground() throws UserException {
+                return GpxParser.readTrackTimeRange(gpxFile);
+            }
+
+            @Override
+            protected void done() {
+                if (isCancelled() || generation != timeRangeReaderGeneration) {
+                    return;
+                }
+                try {
+                    final var timeRange = get();
+                    if (timeRange.isPresent()) {
+                        detectedTimeRange = timeRange.get();
+                        timeRangeStatus = TimeRangeStatus.DETECTED;
+                    } else {
+                        timeRangeStatus = TimeRangeStatus.NO_TIMESTAMPS;
+                    }
+                } catch (final InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    timeRangeStatus = TimeRangeStatus.UNREADABLE;
+                } catch (final ExecutionException e) {
+                    LOGGER.warn("Unable to read the time range of the GPX file \"{}\"", gpxFile.getName(), e.getCause());
+                    timeRangeStatus = TimeRangeStatus.UNREADABLE;
+                }
+                updateTimeRangeLabel();
+            }
+        };
+        timeRangeReader = worker;
+        worker.execute();
+    }
+
+    private void timeRangeChanged() {
+        updateTimeRangeLabel();
+        configurationChanged();
+    }
+
+    private void updateTimeRangeLabel() {
+        gpxTimeRangeLabel.setText(switch (timeRangeStatus) {
+            case NO_FILE -> "";
+            case READING -> resourceBundle.getString("ui.panel.tracksettings.timerange.reading");
+            case UNREADABLE -> resourceBundle.getString("ui.panel.tracksettings.timerange.unreadable");
+            case NO_TIMESTAMPS -> resourceBundle.getString("ui.panel.tracksettings.timerange.notimestamps");
+            case DETECTED -> describeTimeRange(detectedTimeRange);
+        });
+    }
+
+    private String describeTimeRange(final GpxParser.TimeRange fileTimeRange) {
+        final var zone = getSelectedZone();
+        final var fileTimeRangeText = formatTimeRange(fileTimeRange.first(), fileTimeRange.last(), zone);
+
+        final var from = getTimeRangeMillis(timeRangeFromCheckBox, timeRangeFromSpinner, zone);
+        final var to = getTimeRangeMillis(timeRangeToCheckBox, timeRangeToSpinner, zone);
+        if (from == null && to == null) {
+            return fileTimeRangeText;
+        }
+
+        final var first = from == null ? fileTimeRange.first() : Math.max(from, fileTimeRange.first());
+        final var last = to == null ? fileTimeRange.last() : Math.min(to, fileTimeRange.last());
+        final var usedTimeRangeText = first > last
+                ? resourceBundle.getString("ui.panel.tracksettings.timerange.nooverlap")
+                : resourceBundle.getString("ui.panel.tracksettings.timerange.using").formatted(formatTimeRange(first, last, zone));
+        return "<html>%s<br>%s</html>".formatted(escapeHtml(fileTimeRangeText), escapeHtml(usedTimeRangeText)); //NON-NLS
+    }
+
+    private static String formatTimeRange(final long first, final long last, final ZoneId zone) {
+        final var start = DateUtil.toLocalDateTime(first, zone);
+        final var end = DateUtil.toLocalDateTime(last, zone);
+        final var endFormatter = start.toLocalDate().equals(end.toLocalDate()) ? TIME_FORMATTER : DATE_TIME_FORMATTER;
+        return "%s – %s".formatted(DATE_TIME_FORMATTER.format(start), endFormatter.format(end));
+    }
+
+    private static String escapeHtml(final String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"); //NON-NLS
+    }
+
+    private ZoneId getSelectedZone() {
+        return timeZoneComboBox.getSelectedItem() instanceof final TimeZoneItem item ? item.zoneId() : ZoneId.systemDefault();
+    }
+
+    private void selectTimeZone(final ZoneId zone) {
+        for (var i = 0; i < timeZoneComboBox.getItemCount(); i++) {
+            final var item = timeZoneComboBox.getItemAt(i);
+            if (item.zoneId().equals(zone)) {
+                timeZoneComboBox.setSelectedItem(item);
+                return;
+            }
+        }
+        final var item = new TimeZoneItem(zone, formatTimeZone(zone, Instant.now()));
+        timeZoneComboBox.insertItemAt(item, 0);
+        timeZoneComboBox.setSelectedItem(item);
+    }
+
+    private static TimeZoneItem[] createTimeZoneItems() {
+        final var now = Instant.now();
+        return ZoneId.getAvailableZoneIds().stream()
+                .sorted()
+                .map(ZoneId::of)
+                .map(zone -> new TimeZoneItem(zone, formatTimeZone(zone, now)))
+                .toArray(TimeZoneItem[]::new);
+    }
+
+    private static String formatTimeZone(final ZoneId zone, final Instant now) {
+        final var offset = zone.getRules().getOffset(now);
+        return "%s (UTC%s)".formatted(zone.getId(), ZoneOffset.UTC.equals(offset) ? "+00:00" : offset.getId()); //NON-NLS
+    }
+
+    private static JSpinner createDateTimeSpinner() {
+        final var spinner = new JSpinner(new WallClockSpinnerModel());
+        final var editor = new JSpinner.DateEditor(spinner, DATE_TIME_PATTERN);
+        editor.getFormat().setTimeZone(UTC_TIME_ZONE);
+        spinner.setEditor(editor);
+        spinner.setValue(wallClockToSpinnerValue(LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS)));
+        spinner.setEnabled(false);
+        return spinner;
+    }
+
+    private static void setTimeRangeValue(final JCheckBox checkBox, final JSpinner spinner, final Long epochMillis, final ZoneId zone) {
+        if (epochMillis != null) {
+            spinner.setValue(wallClockToSpinnerValue(DateUtil.toLocalDateTime(epochMillis, zone)));
+        }
+        checkBox.setSelected(epochMillis != null);
+    }
+
+    private static Long getTimeRangeMillis(final JCheckBox checkBox, final JSpinner spinner, final ZoneId zone) {
+        if (!checkBox.isSelected()) {
+            return null;
+        }
+        final var wallClock = LocalDateTime.ofInstant(((Date) spinner.getValue()).toInstant(), ZoneOffset.UTC);
+        return DateUtil.toEpochMillis(wallClock, zone);
+    }
+
+    private Date epochToSpinnerValue(final long epochMillis) {
+        return wallClockToSpinnerValue(DateUtil.toLocalDateTime(epochMillis, getSelectedZone()));
+    }
+
+    // the spinners edit a wall-clock time, so their date values are encoded in UTC and independent of any time zone
+    private static Date wallClockToSpinnerValue(final LocalDateTime wallClock) {
+        return Date.from(wallClock.toInstant(ZoneOffset.UTC));
+    }
+
 
     protected abstract void remove();
 
     protected abstract void configurationChanged();
+
+    private enum TimeRangeStatus { NO_FILE, READING, UNREADABLE, NO_TIMESTAMPS, DETECTED }
+
+    private record TimeZoneItem(ZoneId zoneId, String label) {
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    private static final class WallClockSpinnerModel extends SpinnerDateModel {
+        @Serial
+        private static final long serialVersionUID = -3326472851964123367L;
+
+        @Override
+        public Object getNextValue() {
+            return add(1);
+        }
+
+        @Override
+        public Object getPreviousValue() {
+            return add(-1);
+        }
+
+        private Date add(final int amount) {
+            final var calendar = Calendar.getInstance(UTC_TIME_ZONE, Locale.ROOT);
+            calendar.setTime(getDate());
+            calendar.add(getCalendarField(), amount);
+            return calendar.getTime();
+        }
+    }
 
 }

@@ -49,6 +49,9 @@ public final class TrackConfiguration {
     private Long forcedPointInterval;
     private Long trimGpxStart;
     private Long trimGpxEnd;
+    private Long timeRangeFrom;
+    private Long timeRangeTo;
+    private String timeRangeZone;
     private float lineWidth;
     private float preDrawLineWidth = DEFAULT_PRE_DRAW_LINE_WIDTH;
     private File inputIcon;
@@ -71,7 +74,8 @@ public final class TrackConfiguration {
 
     @SuppressWarnings({"checkstyle:ParameterNumber", "java:S107"})
     private TrackConfiguration(final File inputGpx, final String label, final Color color, final Color preDrawTrackColor, final Long timeOffset,
-                               final Long forcedPointInterval, final Long trimGpxStart, final Long trimGpxEnd, final float lineWidth,
+                               final Long forcedPointInterval, final Long trimGpxStart, final Long trimGpxEnd,
+                               final Long timeRangeFrom, final Long timeRangeTo, final String timeRangeZone, final float lineWidth,
                                final float preDrawLineWidth, final TrackIcon trackIcon, final File inputIcon, final boolean mirrorTrackIcon,
                                final TrackIcon trackEndIcon, final File inputEndIcon, final boolean mirrorTrackEndIcon) {
         this.inputGpx = inputGpx;
@@ -82,6 +86,9 @@ public final class TrackConfiguration {
         this.forcedPointInterval = forcedPointInterval;
         this.trimGpxStart = trimGpxStart;
         this.trimGpxEnd = trimGpxEnd;
+        this.timeRangeFrom = timeRangeFrom;
+        this.timeRangeTo = timeRangeTo;
+        this.timeRangeZone = timeRangeZone;
         this.lineWidth = lineWidth;
         this.preDrawLineWidth = preDrawLineWidth;
         this.trackIcon = trackIcon;
@@ -140,6 +147,29 @@ public final class TrackConfiguration {
         return trimGpxEnd;
     }
 
+    /** First GPS timestamp to process in epoch milliseconds (inclusive), {@code null} for no lower limit. */
+    public Long getTimeRangeFrom() {
+        return timeRangeFrom;
+    }
+
+    /** Last GPS timestamp to process in epoch milliseconds (inclusive), {@code null} for no upper limit. */
+    public Long getTimeRangeTo() {
+        return timeRangeTo;
+    }
+
+    /** Time zone ID used to enter and display the time range, {@code null} for the system default. */
+    public String getTimeRangeZone() {
+        return timeRangeZone;
+    }
+
+    public boolean hasTimeRange() {
+        return timeRangeFrom != null || timeRangeTo != null;
+    }
+
+    public boolean isInTimeRange(final long time) {
+        return (timeRangeFrom == null || time >= timeRangeFrom) && (timeRangeTo == null || time <= timeRangeTo);
+    }
+
     public float getLineWidth() {
         return lineWidth;
     }
@@ -174,6 +204,9 @@ public final class TrackConfiguration {
         private Long forcedPointInterval;
         private Long trimGpxStart;
         private Long trimGpxEnd;
+        private Long timeRangeFrom;
+        private Long timeRangeTo;
+        private String timeRangeZone;
         private float lineWidth = DEFAULT_LINE_WIDTH;
         private float preDrawLineWidth = DEFAULT_PRE_DRAW_LINE_WIDTH;
         private TrackIcon trackIcon = null;
@@ -190,7 +223,8 @@ public final class TrackConfiguration {
 
         public TrackConfiguration build() {
             return new TrackConfiguration(
-                    inputGpx, label, color, preDrawTrackColor, timeOffset, forcedPointInterval, trimGpxStart, trimGpxEnd, lineWidth, preDrawLineWidth,
+                    inputGpx, label, color, preDrawTrackColor, timeOffset, forcedPointInterval, trimGpxStart, trimGpxEnd,
+                    timeRangeFrom, timeRangeTo, timeRangeZone, lineWidth, preDrawLineWidth,
                     trackIcon, inputIcon, mirrorTrackIcon, trackEndIcon, inputEndIcon, mirrorTrackEndIcon
             );
         }
@@ -239,6 +273,21 @@ public final class TrackConfiguration {
 
         public Builder trimGpxEnd(final Long trimGpxEnd) {
             this.trimGpxEnd = trimGpxEnd;
+            return this;
+        }
+
+        public Builder timeRangeFrom(final Long timeRangeFrom) {
+            this.timeRangeFrom = timeRangeFrom;
+            return this;
+        }
+
+        public Builder timeRangeTo(final Long timeRangeTo) {
+            this.timeRangeTo = timeRangeTo;
+            return this;
+        }
+
+        public Builder timeRangeZone(final String timeRangeZone) {
+            this.timeRangeZone = timeRangeZone;
             return this;
         }
 

@@ -14,9 +14,17 @@ For questions and support requests, please use
 ### Features
 
 * Add option to freeze map before/after showing photos
+* Add a date & time range per track to process only part of a GPX file, entered in a selectable time zone  
+  The track tab shows the time range of the GPX file and the part that will be used;
+  the command line supports `--time-range-from`, `--time-range-to` and `--time-range-zone`
+* Add map layers: separate multiple TMS URL templates with `|` to draw them on top of each other
+* Add built-in Hong Kong Lands Department background maps (imagery or basemap with Chinese or English labels)
 
 ### Fixes
 
+* Fix rendering failing when a single map tile is missing; missing tiles are now left blank
+* Fix computed zoom exceeding the maximum zoom of the selected background map
+* Fix transparent parts of background maps being rendered black
 * Fix format error when reading date and time from GPX file
 * Fix missing command-line option to customize information text
 * Fix missing command-line option for pre draw line width

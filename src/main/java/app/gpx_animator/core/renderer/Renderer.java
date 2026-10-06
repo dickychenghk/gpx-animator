@@ -32,6 +32,7 @@ import app.gpx_animator.core.renderer.framewriter.FrameWriter;
 import app.gpx_animator.core.renderer.framewriter.NullFrameWriter;
 import app.gpx_animator.core.renderer.framewriter.VideoFrameWriter;
 import app.gpx_animator.core.renderer.plugins.RendererPlugin;
+import app.gpx_animator.core.util.MapUtil;
 import app.gpx_animator.core.util.PluginUtil;
 import app.gpx_animator.core.util.RenderUtil;
 import app.gpx_animator.core.util.Utils;
@@ -435,14 +436,27 @@ public final class Renderer {
                 final var timePointMap = new TreeMap<Long, Point2D>();
                 toTimePointMap(timePointMap, trackIndex, trackSegment.getTrackPoints(), Long.MIN_VALUE);
                 trimGpxData(timePointMap, trackConfiguration);
+                if (timePointMap.isEmpty()) {
+                    continue;
+                }
                 timePointMapList.add(timePointMap);
                 var oldestTimeAsDefaultForWaypoints = timePointMap.keySet().stream().min(Long::compareTo).orElse(Long.MIN_VALUE);
                 toTimePointMap(wpMap, trackIndex, gch.getWayPoints(), oldestTimeAsDefaultForWaypoints);
                 mergeConnectedSpans(spanList, timePointMap);
             }
 
+            if (timePointMapList.isEmpty()) {
+                LOGGER.warn("No track points left in \"{}\" after applying the date & time range and trim settings, skipping this track",
+                        inputGpxFile.getName());
+            }
+
             Collections.reverse(timePointMapList); // reversing because of last known location drawing
+            // added even when empty: paint() and drawMarker() pair this list with the track configurations by index
             timePointMapListList.add(timePointMapList);
+        }
+
+        if (timePointMapListList.stream().allMatch(List::isEmpty)) {
+            throw new UserException(resourceBundle.getString("renderer.error.notrackinrange"));
         }
     }
 
@@ -515,17 +529,29 @@ public final class Renderer {
         if (cfg.getTmsUrlTemplate() != null && cfg.getZoom() == null) {
             // force using computed zoom
             final var userSpecifiedHeight = cfg.getHeight() != null;
+            final int computedZoom;
             if (userSpecifiedHeight) {
                 final int height = cfg.getHeight();
                 final var zoom1 = (int) Math.floor(Math.log(Math.PI / 128.0 * (width - cfg.getMargin() * 2) / (maxX - minX)) / Math.log(2));
                 final var zoom2 = (int) Math.floor(Math.log(Math.PI / 128.0 * (height - cfg.getMargin() * 2) / (maxY - minY)) / Math.log(2));
-                zoom = Math.min(zoom1, zoom2);
+                computedZoom = Math.min(zoom1, zoom2);
             } else {
-                zoom = (int) Math.floor(Math.log(Math.PI / 128.0 * (width - cfg.getMargin() * 2) / (maxX - minX)) / Math.log(2));
+                computedZoom = (int) Math.floor(Math.log(Math.PI / 128.0 * (width - cfg.getMargin() * 2) / (maxX - minX)) / Math.log(2));
             }
+            zoom = limitToMaxZoom(computedZoom);
             rc.setProgress1(0, String.format(resourceBundle.getString("renderer.progress.zoom"), zoom));
         } else {
             zoom = cfg.getZoom();
+        }
+        return zoom;
+    }
+
+    private int limitToMaxZoom(final int zoom) {
+        final var mapTemplate = MapUtil.getMapTemplate(cfg.getTmsUrlTemplate());
+        final var maxZoom = mapTemplate != null ? mapTemplate.maxZoom() : null;
+        if (maxZoom != null && zoom > maxZoom) {
+            LOGGER.info("Computed zoom {} exceeds the maximum zoom of the selected map, using zoom {}", zoom, maxZoom);
+            return maxZoom;
         }
         return zoom;
     }
@@ -640,6 +666,13 @@ public final class Renderer {
         }
 
         for (final var gpxPoint : gpxPoints) {
+            if (trackConfiguration.hasTimeRange()) {
+                final var gpsTime = gpxPoint.getTime();
+                if (gpsTime == null || gpsTime == Long.MIN_VALUE || !trackConfiguration.isInTimeRange(gpsTime)) {
+                    continue;
+                }
+            }
+
             final var x = lonToX(gpxPoint.getLongitude());
             final var y = latToY(gpxPoint.getLatitude());
 

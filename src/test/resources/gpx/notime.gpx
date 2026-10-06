@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<gpx version="1.1"
+     creator="GPX Animator"
+     xmlns="http://www.topografix.com/GPX/1/1"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <trk>
+    <name>Track without timestamps</name>
+    <trkseg>
+      <trkpt lat="22.2783" lon="114.1747">
+        <ele>5</ele>
+      </trkpt>
+      <trkpt lat="22.2789" lon="114.1752">
+        <ele>6</ele>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>

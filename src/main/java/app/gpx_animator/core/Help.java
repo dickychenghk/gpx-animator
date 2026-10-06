@@ -23,6 +23,7 @@ import app.gpx_animator.core.preferences.Preferences;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.io.PrintWriter;
+import java.time.ZoneId;
 
 
 public final class Help {
@@ -57,6 +58,9 @@ public final class Help {
         w.writeOptionHelp(Option.INPUT_MUSIC, "input-music", false, cfg.getInputMusic()); //NON-NLS
         w.writeOptionHelp(Option.TRIM_GPX_START, "trim-gpx-start", true, tc.getTrimGpxStart()); //NON-NLS
         w.writeOptionHelp(Option.TRIM_GPX_END, "trim-gpx-end", true, tc.getTrimGpxEnd()); //NON-NLS
+        w.writeOptionHelp(Option.TIME_RANGE_FROM, "date-time", true, tc.getTimeRangeFrom()); //NON-NLS
+        w.writeOptionHelp(Option.TIME_RANGE_TO, "date-time", true, tc.getTimeRangeTo()); //NON-NLS
+        w.writeOptionHelp(Option.TIME_RANGE_ZONE, "zone-id", true, ZoneId.systemDefault().getId()); //NON-NLS
         w.writeOptionHelp(Option.INFORMATION, "text", false, cfg.getInformation().replace("\n", "\\n")); //NON-NLS
         w.writeOptionHelp(Option.INFORMATION_POSITION, "information-position", false, cfg.getInformationPosition());
         w.writeOptionHelp(Option.INFORMATION_MARGIN, "information-margin", false, cfg.getInformationMargin()); //NON-NLS

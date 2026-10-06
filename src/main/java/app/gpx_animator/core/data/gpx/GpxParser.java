@@ -16,6 +16,7 @@
 package app.gpx_animator.core.data.gpx;
 
 import app.gpx_animator.core.UserException;
+import app.gpx_animator.core.data.entity.TrackPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
@@ -30,6 +31,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PushbackInputStream;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.zip.GZIPInputStream;
 
 public final class GpxParser {
@@ -38,6 +41,35 @@ public final class GpxParser {
 
     private GpxParser() throws InstantiationException {
         throw new InstantiationException("GpxParser is a utility class and can't be instantiated!");
+    }
+
+    /**
+     * Reads the timestamps of the first and the last track point of a GPX file.
+     *
+     * @param inputGpx the GPX file
+     * @return the time range in epoch milliseconds or empty, if the track points have no timestamps
+     * @throws UserException if the file can't be read or parsed
+     */
+    public static Optional<TimeRange> readTrackTimeRange(final File inputGpx) throws UserException {
+        final var handler = new GpxContentHandler();
+        parseGpx(inputGpx, handler);
+
+        final var track = handler.getTrack();
+        if (track == null) {
+            return Optional.empty();
+        }
+
+        final var statistics = track.getTrackSegments().stream()
+                .flatMap(trackSegment -> trackSegment.getTrackPoints().stream())
+                .map(TrackPoint::getTime)
+                .filter(Objects::nonNull)
+                .filter(time -> time != Long.MIN_VALUE)
+                .mapToLong(Long::longValue)
+                .summaryStatistics();
+
+        return statistics.getCount() == 0
+                ? Optional.empty()
+                : Optional.of(new TimeRange(statistics.getMin(), statistics.getMax()));
     }
 
     public static void parseGpx(final File inputGpx, final DefaultHandler dh) throws UserException {
@@ -82,5 +114,7 @@ public final class GpxParser {
         pb.unread(signature, 0, numBytesRead);
         return signature[0] == (byte) 0x1f && signature[1] == (byte) 0x8b ? new GZIPInputStream(pb) : pb;
     }
+
+    public record TimeRange(long first, long last) { }
 
 }

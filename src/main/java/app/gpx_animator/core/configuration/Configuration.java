@@ -501,6 +501,18 @@ public final class Configuration {
             errors.add(resourceBundle.getString("configuration.validation.viewport.height"));
         }
 
+        if (trackConfigurationList != null) {
+            for (final var trackConfiguration : trackConfigurationList) {
+                final var timeRangeFrom = trackConfiguration.getTimeRangeFrom();
+                final var timeRangeTo = trackConfiguration.getTimeRangeTo();
+                if (timeRangeFrom != null && timeRangeTo != null && timeRangeFrom > timeRangeTo) {
+                    final var inputGpx = trackConfiguration.getInputGpx();
+                    errors.add(resourceBundle.getString("configuration.validation.timerange")
+                            .formatted(inputGpx != null ? inputGpx.getName() : ""));
+                }
+            }
+        }
+
         if (!errors.isEmpty()) {
             var message = errors.stream()
                     .map("- %s"::formatted)

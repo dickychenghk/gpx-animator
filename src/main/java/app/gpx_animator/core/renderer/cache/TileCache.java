@@ -24,7 +24,9 @@ import org.slf4j.LoggerFactory;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -105,6 +107,11 @@ public final class TileCache {
         return size;
     }
 
+    /**
+     * Loads a map tile, using the tile cache if enabled.
+     *
+     * @return the map tile or {@code null} if the tile server has no tile at this position (HTTP 204 or 404)
+     */
     public static BufferedImage getTile(final String url, final String userAgent, final String tileCacheDir, final Long tileCacheTimeLimit)
         throws UserException {
 
@@ -123,17 +130,31 @@ public final class TileCache {
     }
 
     private static BufferedImage unCachedGetTile(final String url, final String userAgent) throws UserException {
-        BufferedImage mapTile;
-
         if (!userAgent.isBlank()) {
             System.setProperty("http.agent", userAgent);
         } else {
             System.setProperty("http.agent", Constants.USER_AGENT);
         }
-        try {
-            mapTile = ImageIO.read(URI.create(url).toURL());
+
+        final byte[] data;
+        try (var inputStream = URI.create(url).toURL().openStream()) {
+            data = inputStream.readAllBytes();
+        } catch (final FileNotFoundException e) {
+            LOGGER.debug("No map tile available at {} (not found)", url);
+            return null;
         } catch (final IOException e) {
             throw new UserException(String.format("error getting tile %s: %s", url, e.getCause()), e);
+        }
+        if (data.length == 0) {
+            LOGGER.debug("No map tile available at {} (no content)", url);
+            return null;
+        }
+
+        final BufferedImage mapTile;
+        try {
+            mapTile = ImageIO.read(new ByteArrayInputStream(data));
+        } catch (final IOException e) {
+            throw new UserException(String.format("error reading tile %s: %s", url, e.getMessage()), e);
         }
         if (mapTile == null) {
             throw new UserException("could not get tile ".concat(url));
@@ -151,6 +172,11 @@ public final class TileCache {
 
         // Age out old tile file in cache directory.
         ageCacheFile(cacheFile, tileCacheTimeLimit);
+
+        // An empty file in the cache remembers that the server has no tile at this position.
+        if (cacheFile.isFile() && cacheFile.length() == 0) {
+            return null;
+        }
 
         // If map tile is in cache, then return it.
         if (cacheFile.isFile()) {
@@ -177,7 +203,11 @@ public final class TileCache {
         if (mapTile == null) {          // Map tile doesn't exist or we could not read it
             mapTile = unCachedGetTile(url, userAgent);
             try {
-                ImageIO.write(mapTile, CACHED_FILE_TYPE, cacheFile);
+                if (mapTile == null) {
+                    Files.write(cacheFile.toPath(), new byte[0]);
+                } else {
+                    ImageIO.write(mapTile, CACHED_FILE_TYPE, cacheFile);
+                }
             } catch (final IOException e) {
                 // Treat as non-fatal. This should revert the behavior to the same
                 // as running without a cache.

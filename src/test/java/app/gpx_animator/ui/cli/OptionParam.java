@@ -24,6 +24,7 @@ import app.gpx_animator.core.data.VideoCodec;
 import lombok.Getter;
 import java.awt.Color;
 import java.awt.Font;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -251,6 +252,20 @@ public enum OptionParam {
                 true,
                 () -> Optional.of("20"),
                 (factory) -> getFirstTrackConfiguration(factory).getTimeOffset().equals(20L)),
+    TIME_RANGE_FROM(Option.TIME_RANGE_FROM,
+                    true,
+                    () -> Optional.of("2024-05-01T08:00:00+08:00"),
+                    (factory) -> getFirstTrackConfiguration(factory).getTimeRangeFrom()
+                            .equals(Instant.parse("2024-05-01T00:00:00Z").toEpochMilli())),
+    TIME_RANGE_TO(Option.TIME_RANGE_TO,
+                  true,
+                  () -> Optional.of("2024-05-01T12:30:00Z"),
+                  (factory) -> getFirstTrackConfiguration(factory).getTimeRangeTo()
+                          .equals(Instant.parse("2024-05-01T12:30:00Z").toEpochMilli())),
+    TIME_RANGE_ZONE(Option.TIME_RANGE_ZONE,
+                    true,
+                    () -> Optional.of("Asia/Hong_Kong"),
+                    (factory) -> "Asia/Hong_Kong".equals(getFirstTrackConfiguration(factory).getTimeRangeZone())),
     TMS_API_KEY(Option.TMS_API_KEY,
                 false,
                 () -> Optional.of("tmsApiKey"),

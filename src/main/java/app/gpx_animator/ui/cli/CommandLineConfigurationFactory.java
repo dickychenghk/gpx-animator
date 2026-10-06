@@ -28,8 +28,10 @@ import app.gpx_animator.core.data.SpeedUnit;
 import app.gpx_animator.core.data.TrackIcon;
 import app.gpx_animator.core.data.VideoCodec;
 import app.gpx_animator.core.preferences.Preferences;
+import app.gpx_animator.core.util.DateUtil;
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.w3c.dom.Element;
 import org.xml.sax.SAXException;
 
@@ -44,6 +46,8 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.DateTimeException;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ResourceBundle;
@@ -58,6 +62,9 @@ public final class CommandLineConfigurationFactory {
     private final List<String> inputGpxList = new ArrayList<>();
     private final List<Long> trimGpxStartList = new ArrayList<>();
     private final List<Long> trimGpxEndList = new ArrayList<>();
+    private final List<String> timeRangeFromList = new ArrayList<>();
+    private final List<String> timeRangeToList = new ArrayList<>();
+    private final List<String> timeRangeZoneList = new ArrayList<>();
     private final List<Float> preDrawLineWidthList = new ArrayList<>();
     private final List<String> inputIconList = new ArrayList<>();
 
@@ -122,6 +129,9 @@ public final class CommandLineConfigurationFactory {
                         case FONT -> cfg.font(new FontXmlAdapter().unmarshal(args[++i]));
                         case TRIM_GPX_START -> trimGpxStartList.add(Long.parseLong(args[++i]));
                         case TRIM_GPX_END -> trimGpxEndList.add(Long.parseLong(args[++i]));
+                        case TIME_RANGE_FROM -> timeRangeFromList.add(args[++i]);
+                        case TIME_RANGE_TO -> timeRangeToList.add(args[++i]);
+                        case TIME_RANGE_ZONE -> timeRangeZoneList.add(args[++i]);
                         case PRE_DRAW_LINE_WIDTH -> preDrawLineWidthList.add(Float.parseFloat(args[++i]));
                         case FORCED_POINT_TIME_INTERVAL -> {
                             final var s1 = args[++i].trim();
@@ -238,9 +248,19 @@ public final class CommandLineConfigurationFactory {
         normalizeMirrorTrackIcons();
         normalizeTrimGpxStart();
         normalizeTrimGpxEnd();
+        normalizeTimeRangeValues(inputGpxList, timeRangeFromList);
+        normalizeTimeRangeValues(inputGpxList, timeRangeToList);
+        normalizeTimeRangeValues(inputGpxList, timeRangeZoneList);
 
         for (int i = 0, n = inputGpxList.size(); i < n; i++) {
             final var tcb = TrackConfiguration.createBuilder();
+            final var timeRangeZoneId = timeRangeZoneList.get(i);
+            final var timeRangeZone = parseTimeRangeZone(timeRangeZoneId, resourceBundle);
+            if (timeRangeZoneId != null) {
+                tcb.timeRangeZone(timeRangeZone.getId());
+            }
+            tcb.timeRangeFrom(parseTimeRangeValue(timeRangeFromList.get(i), timeRangeZone, Option.TIME_RANGE_FROM, resourceBundle));
+            tcb.timeRangeTo(parseTimeRangeValue(timeRangeToList.get(i), timeRangeZone, Option.TIME_RANGE_TO, resourceBundle));
             tcb.inputGpx(new File(inputGpxList.get(i)));
             tcb.color(colorList.get(i));
             tcb.preDrawTrackColor(preDrawTrackColorList.get(i));
@@ -383,6 +403,51 @@ public final class CommandLineConfigurationFactory {
                 trimGpxList.add(trimGpxList.get(i - size2));
             }
         }
+    }
+
+    private static void normalizeTimeRangeValues(@NotNull final List<String> inputGpxList,
+                                                 @NotNull final List<String> timeRangeValueList) {
+        final var size = inputGpxList.size();
+        final var size2 = timeRangeValueList.size();
+        if (size2 == 0) {
+            for (var i = 0; i < size; i++) {
+                timeRangeValueList.add(null);
+            }
+        } else if (size2 < size) {
+            for (var i = size2; i < size; i++) {
+                timeRangeValueList.add(timeRangeValueList.get(i - size2));
+            }
+        }
+    }
+
+    private static @NotNull ZoneId parseTimeRangeZone(@Nullable final String zoneId,
+                                                      @NotNull final ResourceBundle resourceBundle) throws UserException {
+        if (zoneId == null || zoneId.isBlank()) {
+            return ZoneId.systemDefault();
+        }
+        try {
+            return ZoneId.of(zoneId.trim());
+        } catch (final DateTimeException e) {
+            throw new UserException(resourceBundle.getString("cli.error.timezone")
+                    .formatted(zoneId, optionArgument(Option.TIME_RANGE_ZONE)), e);
+        }
+    }
+
+    private static @Nullable Long parseTimeRangeValue(@Nullable final String value, @NotNull final ZoneId zone,
+                                                      @NotNull final Option option,
+                                                      @NotNull final ResourceBundle resourceBundle) throws UserException {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return DateUtil.parseDateTime(value, zone);
+        } catch (final DateTimeException e) {
+            throw new UserException(resourceBundle.getString("cli.error.datetime").formatted(value, optionArgument(option)), e);
+        }
+    }
+
+    private static String optionArgument(@NotNull final Option option) {
+        return "--".concat(option.getName());
     }
 
     private static String checkVersion(@NotNull final ResourceBundle resourceBundle) {

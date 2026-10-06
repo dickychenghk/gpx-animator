@@ -22,22 +22,32 @@ import app.gpx_animator.core.renderer.Metadata;
 import app.gpx_animator.core.renderer.RenderingContext;
 import app.gpx_animator.core.renderer.cache.TileCache;
 import edu.umd.cs.findbugs.annotations.NonNull;
+import edu.umd.cs.findbugs.annotations.Nullable;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.RescaleOp;
+import java.util.Arrays;
+import java.util.List;
 import java.util.ResourceBundle;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 // Plugins are loaded using reflection
 @SuppressWarnings("unused")
 public final class BackgroundMapPlugin implements RendererPlugin {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(BackgroundMapPlugin.class);
+
     @SuppressWarnings({"RegExpAnonymousGroup", "RegExpRedundantEscape"})
     // This regex is tested, and I don't want to rewrite it which may potentionally break it.
     private static final Pattern SWITCH_PATTERN = Pattern.compile("\\{switch:([^}]*)\\}");
+
+    private static final Pattern LAYER_SEPARATOR = Pattern.compile("\\|");
 
     private final ResourceBundle resourceBundle = Preferences.getResourceBundle();
 
@@ -104,11 +114,13 @@ public final class BackgroundMapPlugin implements RendererPlugin {
         final var total = (maxXtile - tileX + 1) * (tileY - maxYtile + 1);
         var i = 0;
 
-        final var m = SWITCH_PATTERN.matcher(tmsUrlTemplate); // note that only one switch in pattern is supported
-        final var options = m.find() ? m.group(1).split(",") : null;
-
+        final var layerTemplates = splitLayers(tmsUrlTemplate);
         final var tileCacheDir = Preferences.getTileCacheDir();
         final var tileCacheTimeLimit = Preferences.getTileCacheTimeLimit();
+        final var visibilityOp = new RescaleOp(backgroundMapVisibility, (1f - backgroundMapVisibility) * 255f, null);
+
+        var drawnTiles = 0;
+        UserException firstError = null;
 
         for (var x = tileX; x <= maxXtile; x++) {
             for (var y = tileY; y >= maxYtile; y--) {
@@ -118,39 +130,93 @@ public final class BackgroundMapPlugin implements RendererPlugin {
 
                 i++;
 
-                var url = tmsUrlTemplate
-                        .replace("{zoom}", Integer.toString(zoom)) //NON-NLS
-                        .replace("{x}", Integer.toString(x)) //NON-NLS
-                        .replace("{y}", Integer.toString(y)) //NON-NLS
-                        .replace("{apikey}", tmsApiKey) //NON-NLS
-                        .replace("{access_token}", tmsApiKey); //NON-NLS
-
-                if (options != null) {
-                    final var sb = new StringBuilder();
-                    final var matcher = SWITCH_PATTERN.matcher(url);
-                    if (matcher.find()) {
-                        matcher.appendReplacement(sb, options[i % options.length]);
-                    }
-                    matcher.appendTail(sb);
-                    url = sb.toString();
-                }
-
                 context.setProgress1((int) (100.0 * i / total), String.format(resourceBundle.getString("map.loadingtiles.progress"), i, total));
 
-                final var tile = TileCache.getTile(url, tmsUserAgent, tileCacheDir, tileCacheTimeLimit);
+                BufferedImage tile = null;
+                for (final var layerTemplate : layerTemplates) {
+                    final var url = buildTileUrl(layerTemplate, zoom, x, y, tmsApiKey, i);
+                    final BufferedImage layerTile;
+                    try {
+                        layerTile = TileCache.getTile(url, tmsUserAgent, tileCacheDir, tileCacheTimeLimit);
+                    } catch (final UserException e) {
+                        LOGGER.warn("Skipping map tile {}: {}", url, e.getMessage());
+                        if (firstError == null) {
+                            firstError = e;
+                        }
+                        continue;
+                    }
+                    if (layerTile == null) {
+                        continue;
+                    }
+                    if (tile == null) {
+                        tile = new BufferedImage(layerTile.getWidth(), layerTile.getHeight(), BufferedImage.TYPE_INT_ARGB);
+                    }
+                    final var tileGraphics = tile.createGraphics();
+                    tileGraphics.drawImage(layerTile, 0, 0, null);
+                    tileGraphics.dispose();
+                }
 
-                // convert to RGB format
-                final var tile1 = new BufferedImage(tile.getWidth(), tile.getHeight(), BufferedImage.TYPE_INT_RGB);
-                tile1.getGraphics().drawImage(tile, 0, 0, null);
-
-                ga.drawImage(tile1,
-                        new RescaleOp(backgroundMapVisibility, (1f - backgroundMapVisibility) * 255f, null),
-                        256 * (x - tileX) + offsetX,
-                        image.getHeight() - (256 * (tileY - y) + offsetY));
+                if (tile != null) {
+                    // a single scale factor leaves the alpha channel untouched, so transparent parts show the background
+                    ga.drawImage(tile, visibilityOp,
+                            256 * (x - tileX) + offsetX,
+                            image.getHeight() - (256 * (tileY - y) + offsetY));
+                    drawnTiles++;
+                }
             }
         }
 
         context.setProgress1(100, String.format(resourceBundle.getString("map.loadingtiles.progress"), i, total));
+
+        if (drawnTiles == 0) {
+            throw firstError != null ? firstError
+                    : new UserException(resourceBundle.getString("map.error.notiles").formatted(zoom));
+        }
+    }
+
+    /**
+     * Splits a TMS URL template into its layers, which are separated by {@code |} and drawn bottom to top.
+     *
+     * @param urlTemplate the TMS URL template
+     * @return the URL templates of the layers
+     */
+    static List<String> splitLayers(@NonNull final String urlTemplate) {
+        return Arrays.stream(LAYER_SEPARATOR.split(urlTemplate))
+                .map(String::trim)
+                .filter(layer -> !layer.isEmpty())
+                .toList();
+    }
+
+    /**
+     * Builds the URL of a single map tile for one layer.
+     *
+     * @param layerTemplate the URL template of the layer
+     * @param zoomLevel the zoom level
+     * @param tileX the x coordinate of the tile
+     * @param tileY the y coordinate of the tile
+     * @param apiKey the API key, may be {@code null}
+     * @param counter the running tile counter, used to rotate through the {@code {switch:…}} options
+     * @return the URL of the map tile
+     */
+    static String buildTileUrl(@NonNull final String layerTemplate, final int zoomLevel, final int tileX, final int tileY,
+                               @Nullable final String apiKey, final int counter) {
+        final var key = apiKey == null ? "" : apiKey;
+        final var url = layerTemplate
+                .replace("{zoom}", Integer.toString(zoomLevel)) //NON-NLS
+                .replace("{x}", Integer.toString(tileX)) //NON-NLS
+                .replace("{y}", Integer.toString(tileY)) //NON-NLS
+                .replace("{apikey}", key) //NON-NLS
+                .replace("{access_token}", key); //NON-NLS
+
+        final var matcher = SWITCH_PATTERN.matcher(url); // note that only one switch per layer is supported
+        if (!matcher.find()) {
+            return url;
+        }
+        final var options = matcher.group(1).split(",");
+        final var sb = new StringBuilder();
+        matcher.appendReplacement(sb, Matcher.quoteReplacement(options[counter % options.length]));
+        matcher.appendTail(sb);
+        return sb.toString();
     }
 
     private static double yToTileY(final int zoom, final double minY) {

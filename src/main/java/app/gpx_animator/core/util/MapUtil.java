@@ -48,8 +48,23 @@ public final class MapUtil {
 
     private static final String MAPS_UPDATE_URL = "https://josm.openstreetmap.de/maps";
 
+    private static final String LANDSD_TILE_URL = "https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/%s/WGS84/{zoom}/{x}/{y}.png"; //NON-NLS
+    private static final String LANDSD_ATTRIBUTION = "© Map from Lands Department"; //NON-NLS
+    private static final int LANDSD_MAX_ZOOM = 20;
+
+    private static final List<MapTemplate> BUILT_IN_MAPS = List.of(
+            landsDepartmentMap("hk-landsd-imagery-tc", "Lands Department Imagery (Chinese labels)", "imagery", "label/hk/tc"), //NON-NLS
+            landsDepartmentMap("hk-landsd-basemap-tc", "Lands Department Basemap (Chinese labels)", "basemap", "label/hk/tc"), //NON-NLS
+            landsDepartmentMap("hk-landsd-imagery-en", "Lands Department Imagery (English labels)", "imagery", "label/hk/en"), //NON-NLS
+            landsDepartmentMap("hk-landsd-basemap-en", "Lands Department Basemap (English labels)", "basemap", "label/hk/en")); //NON-NLS
+
     private MapUtil() throws InstantiationException {
         throw new InstantiationException("MapUtil is a utility class and can't be instantiated!");
+    }
+
+    private static MapTemplate landsDepartmentMap(final String id, final String name, final String baseLayer, final String labelLayer) {
+        final var url = LANDSD_TILE_URL.formatted(baseLayer) + "|" + LANDSD_TILE_URL.formatted(labelLayer);
+        return new MapTemplate(id, name, "tms", url, LANDSD_ATTRIBUTION, true, LANDSD_MAX_ZOOM, "HK"); //NON-NLS
     }
 
     private static Path getMapPath() {
@@ -92,9 +107,14 @@ public final class MapUtil {
         }
     }
 
+    /**
+     * Reads the available map templates: the built-in maps first, followed by the downloaded maps sorted by country and name.
+     *
+     * @return the map templates
+     */
     public static List<MapTemplate> readMaps() {
         if (hasNoMaps() || getMapPath().toFile().length() == 0) {
-            return List.of();
+            return BUILT_IN_MAPS;
         }
 
         final var factory = SAXParserFactory.newInstance();
@@ -179,7 +199,9 @@ public final class MapUtil {
         labeledItems.sort(Comparator.comparing(MapTemplate::countryCode)
                 .thenComparing(MapTemplate::name));
 
-        return labeledItems;
+        final List<MapTemplate> mapTemplates = new ArrayList<>(BUILT_IN_MAPS);
+        mapTemplates.addAll(labeledItems);
+        return mapTemplates;
     }
 
     public static MapTemplate getMapTemplate(final String tmsUrlTemplate) {
@@ -187,9 +209,12 @@ public final class MapUtil {
             return null;
         }
 
-        return readMaps().stream()
+        return BUILT_IN_MAPS.stream()
                 .filter(m -> tmsUrlTemplate.equals(m.url()))
                 .findFirst()
-                .orElse(null);
+                .orElseGet(() -> readMaps().stream()
+                        .filter(m -> tmsUrlTemplate.equals(m.url()))
+                        .findFirst()
+                        .orElse(null));
     }
 }

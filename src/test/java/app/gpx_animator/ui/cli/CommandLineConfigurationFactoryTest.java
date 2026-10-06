@@ -21,16 +21,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.time.Instant;
 import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommandLineConfigurationFactoryTest {
 
     public static final String TEST_COLOR_FF_0096 = "#FF0096";
     public static final String TEST_FONT_MONOSPACED_8 = "Monospaced 8";
+    private static final String TEST_GPX = "hike.gpx";
 
     @ParameterizedTest
     @EnumSource(Option.class)
@@ -78,5 +83,44 @@ class CommandLineConfigurationFactoryTest {
         assertEquals("input1.gpx", factory.getConfiguration().getTrackConfigurationList().get(0).getInputGpx().getName());
         assertEquals("input2.gpx", factory.getConfiguration().getTrackConfigurationList().get(1).getInputGpx().getName());
         assertEquals("input3.gpx", factory.getConfiguration().getTrackConfigurationList().get(2).getInputGpx().getName());
+    }
+
+    @Test
+    void testTimeRangeIsInterpretedInTimeRangeZone() throws UserException {
+        final var args = new String[]{
+                optionArgument(Option.INPUT), TEST_GPX,
+                optionArgument(Option.TIME_RANGE_ZONE), "Asia/Hong_Kong",
+                optionArgument(Option.TIME_RANGE_FROM), "2024-05-01 08:00",
+                optionArgument(Option.TIME_RANGE_TO), "2024-05-01T12:30:00"
+        };
+
+        final var trackConfiguration = new CommandLineConfigurationFactory(args).getConfiguration().getTrackConfigurationList().getFirst();
+
+        assertEquals("Asia/Hong_Kong", trackConfiguration.getTimeRangeZone());
+        assertEquals(Instant.parse("2024-05-01T00:00:00Z").toEpochMilli(), trackConfiguration.getTimeRangeFrom());
+        assertEquals(Instant.parse("2024-05-01T04:30:00Z").toEpochMilli(), trackConfiguration.getTimeRangeTo());
+    }
+
+    @Test
+    void testWithoutTimeRange() throws UserException {
+        final var args = new String[]{optionArgument(Option.INPUT), TEST_GPX};
+
+        final var trackConfiguration = new CommandLineConfigurationFactory(args).getConfiguration().getTrackConfigurationList().getFirst();
+
+        assertFalse(trackConfiguration.hasTimeRange());
+        assertNull(trackConfiguration.getTimeRangeZone());
+    }
+
+    @Test
+    void testInvalidTimeRangeValues() {
+        final var invalidDateTime = new String[]{optionArgument(Option.INPUT), TEST_GPX, optionArgument(Option.TIME_RANGE_FROM), "yesterday"};
+        assertThrows(UserException.class, () -> new CommandLineConfigurationFactory(invalidDateTime));
+
+        final var invalidZone = new String[]{optionArgument(Option.INPUT), TEST_GPX, optionArgument(Option.TIME_RANGE_ZONE), "Mars/Olympus_Mons"};
+        assertThrows(UserException.class, () -> new CommandLineConfigurationFactory(invalidZone));
+    }
+
+    private static String optionArgument(final Option option) {
+        return "--".concat(option.getName());
     }
 }
