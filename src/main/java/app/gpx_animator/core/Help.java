@@ -67,6 +67,8 @@ public final class Help {
         w.writeOptionHelp(Option.INFORMATION_MARGIN, "information-margin", false, cfg.getInformationMargin()); //NON-NLS
         w.writeOptionHelp(Option.INFORMATION_LOCALE, "locale", false,
                 cfg.getInformationLocale().isBlank() ? Locale.getDefault().toLanguageTag() : cfg.getInformationLocale()); //NON-NLS
+        w.writeOptionHelp(Option.INFORMATION_TIME_ZONE, "zone-id", false,
+                cfg.getInformationTimeZone().isBlank() ? ZoneId.systemDefault().getId() : cfg.getInformationTimeZone()); //NON-NLS
         w.writeOptionHelp(Option.COMMENT_POSITION, "comment-position", false, cfg.getCommentPosition());
         w.writeOptionHelp(Option.COMMENT_MARGIN, "comment-margin", false, cfg.getCommentMargin()); //NON-NLS
         w.writeOptionHelp(Option.TRACK_ICON, "trackIcon", true, tc.getTrackIcon()); //NON-NLS

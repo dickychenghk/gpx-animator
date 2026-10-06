@@ -33,6 +33,7 @@ import java.text.DateFormat;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 
 // Plugins are loaded using reflection
 @SuppressWarnings("unused")
@@ -60,6 +61,7 @@ public final class InformationPlugin extends TextRenderer implements RendererPlu
         super(configuration.getFont());
         this.locale = configuration.resolveInformationLocale();
         this.dateFormat = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM, locale);
+        this.dateFormat.setTimeZone(TimeZone.getTimeZone(configuration.resolveInformationTimeZone()));
         this.information = configuration.getInformation();
         this.position = configuration.getInformationPosition();
         this.margin = configuration.getInformationMargin();

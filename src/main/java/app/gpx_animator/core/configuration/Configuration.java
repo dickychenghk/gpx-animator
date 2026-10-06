@@ -37,6 +37,7 @@ import org.jetbrains.annotations.Nullable;
 import java.awt.Color;
 import java.awt.Font;
 import java.io.File;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -110,6 +111,7 @@ public final class Configuration {
     private int attributionMargin = DEFAULT_MARGIN;
     private String information = DEFAULT_INFORMATION;
     private String informationLocale = "";
+    private String informationTimeZone = "";
     private Position informationPosition = Position.BOTTOM_RIGHT;
     private int informationMargin = DEFAULT_MARGIN;
     private Position commentPosition = Position.BOTTOM_CENTER;
@@ -166,7 +168,8 @@ public final class Configuration {
             final boolean skipIdle, final Color backgroundColor, final File backgroundImage, final Color flashbackColor,
             final Long flashbackDuration, final boolean preDrawTrack, final Long keepFirstFrame, final Long keepLastFrame, final File output,
             final VideoCodec videoCodec, final MusicCodec musicCodec, final File inputMusic, final String attribution, final String information,
-            final String informationLocale, final SpeedUnit speedUnit, final Font font, final Double markerSize, final Font waypointFont,
+            final String informationLocale, final String informationTimeZone, final SpeedUnit speedUnit, final Font font,
+            final Double markerSize, final Font waypointFont,
             final Double waypointSize,
             final Double minLon, final Double maxLon, final Double minLat, final Double maxLat,
             final File logo, final Position logoPosition, final int logoMargin,
@@ -209,6 +212,7 @@ public final class Configuration {
         this.attribution = attribution;
         this.information = information;
         this.informationLocale = informationLocale == null ? "" : informationLocale;
+        this.informationTimeZone = informationTimeZone == null ? "" : informationTimeZone;
         this.font = font;
         this.markerSize = markerSize;
         this.waypointFont = waypointFont;
@@ -386,6 +390,17 @@ public final class Configuration {
             return Locale.getDefault();
         }
         return Locale.forLanguageTag(getInformationLocale().replace('_', '-'));
+    }
+
+    public String getInformationTimeZone() {
+        return informationTimeZone == null ? "" : informationTimeZone;
+    }
+
+    public ZoneId resolveInformationTimeZone() {
+        if (getInformationTimeZone().isBlank()) {
+            return ZoneId.systemDefault();
+        }
+        return ZoneId.of(getInformationTimeZone());
     }
 
     /**
@@ -609,6 +624,7 @@ public final class Configuration {
         private int attributionMargin = DEFAULT_MARGIN;
         private String information = DEFAULT_INFORMATION;
         private String informationLocale = "";
+        private String informationTimeZone = "";
         private Position informationPosition = Position.BOTTOM_RIGHT;
         private int informationMargin = DEFAULT_MARGIN;
         private Position commentPosition = Position.BOTTOM_CENTER;
@@ -631,7 +647,7 @@ public final class Configuration {
                     backgroundMapVisibility, tmsUrlTemplate, tmsApiKey, tmsUserAgent,
                     skipIdle, backgroundColor, backgroundImage, flashbackColor, flashbackDuration,
                     preDrawTrack, keepFirstFrame, keepLastFrame, output, videoCodec, musicCodec, inputMusic, attribution, information,
-                    informationLocale, speedUnit, font, markerSize, waypointFont, waypointSize,
+                    informationLocale, informationTimeZone, speedUnit, font, markerSize, waypointFont, waypointSize,
                     minLon, maxLon, minLat, maxLat,
                     logo, logoPosition, logoMargin,
                     attributionPosition, attributionMargin,
@@ -802,6 +818,11 @@ public final class Configuration {
 
         public Builder informationLocale(final String informationLocale) {
             this.informationLocale = informationLocale == null ? "" : informationLocale;
+            return this;
+        }
+
+        public Builder informationTimeZone(final String informationTimeZone) {
+            this.informationTimeZone = informationTimeZone == null ? "" : informationTimeZone;
             return this;
         }
 

@@ -141,6 +141,7 @@ abstract class GeneralSettingsPanel extends JPanel {
     private final JTextArea attributionTextArea;
     private final JTextArea informationTextArea;
     private final InformationLocaleCombo informationLocaleComboBox;
+    private final InformationTimeZoneCombo informationTimeZoneComboBox;
     private final JSpinner maxLatSpinner;
     private final JSpinner minLonSpinner;
     private final JSpinner maxLonSpinner;
@@ -156,7 +157,7 @@ abstract class GeneralSettingsPanel extends JPanel {
     })
     GeneralSettingsPanel() {
         var rowCounter = 0;
-        final var maxRows = 50;
+        final var maxRows = 51;
 
         setBorder(new EmptyBorder(5, 5, 5, 5));
         final var gridBagLayout = new GridBagLayout();
@@ -1329,6 +1330,25 @@ abstract class GeneralSettingsPanel extends JPanel {
         gbcInformationLocale.gridy = rowCounter;
         add(informationLocaleComboBox, gbcInformationLocale);
 
+        final var lblInformationTimeZone = new JLabel(resourceBundle.getString("ui.panel.generalsettings.informationTimeZone.label"));
+        final var gbcLabelInformationTimeZone = new GridBagConstraints();
+        gbcLabelInformationTimeZone.anchor = GridBagConstraints.LINE_END;
+        gbcLabelInformationTimeZone.insets = new Insets(0, 0, 5, 5);
+        gbcLabelInformationTimeZone.gridx = 0;
+        gbcLabelInformationTimeZone.gridy = ++rowCounter;
+        add(lblInformationTimeZone, gbcLabelInformationTimeZone);
+
+        informationTimeZoneComboBox = new InformationTimeZoneCombo(
+                resourceBundle.getString("ui.panel.generalsettings.informationTimeZone.system"),
+                Option.INFORMATION_TIME_ZONE.getHelp() + " "
+                        + resourceBundle.getString("ui.panel.generalsettings.informationTimeZone.search"),
+                this::configurationChanged);
+        final var gbcInformationTimeZone = new GridBagConstraints();
+        gbcInformationTimeZone.fill = GridBagConstraints.HORIZONTAL;
+        gbcInformationTimeZone.gridx = 1;
+        gbcInformationTimeZone.gridy = rowCounter;
+        add(informationTimeZoneComboBox, gbcInformationTimeZone);
+
         final var lblInformationPosition = new JLabel(resourceBundle.getString("ui.panel.generalsettings.informationPosition.label"));
         final var gbcLabelInfoPosition = new GridBagConstraints();
         gbcLabelInfoPosition.anchor = GridBagConstraints.LINE_END;
@@ -1607,6 +1627,7 @@ abstract class GeneralSettingsPanel extends JPanel {
 
         informationTextArea.setText(c.getInformation());
         informationLocaleComboBox.setLanguageTag(c.getInformationLocale());
+        informationTimeZoneComboBox.setZoneId(c.getInformationTimeZone());
         attributionTextArea.setText(c.getAttribution());
         SwingUtilities.invokeLater(() ->
                 checkAttributionMandatory(attributionLocationComboBox.getSelectedItem(), tmsUrlTemplateComboBox.getSelectedItem()));
@@ -1697,6 +1718,7 @@ abstract class GeneralSettingsPanel extends JPanel {
                 .photoAnimationDuration((Long) photoAnimationDurationSpinner.getValue())
                 .information(informationTextArea.getText())
                 .informationLocale(informationLocaleComboBox.getLanguageTag())
+                .informationTimeZone(informationTimeZoneComboBox.getZoneId())
                 .attribution(attribution)
                 .attributionPosition((Position) attributionLocationComboBox.getSelectedItem())
                 .speedUnit(speedUnit)

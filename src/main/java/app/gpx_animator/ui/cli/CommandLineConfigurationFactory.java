@@ -110,6 +110,7 @@ public final class CommandLineConfigurationFactory {
                         case INFORMATION_POSITION -> cfg.informationPosition(Position.parse(args[++i]));
                         case INFORMATION_MARGIN -> cfg.informationMargin(Integer.parseInt(args[++i]));
                         case INFORMATION_LOCALE -> cfg.informationLocale(parseInformationLocale(args[++i], resourceBundle));
+                        case INFORMATION_TIME_ZONE -> cfg.informationTimeZone(parseInformationTimeZone(args[++i], resourceBundle));
                         case COMMENT_POSITION -> cfg.commentPosition(Position.parse(args[++i]));
                         case COMMENT_MARGIN -> cfg.commentMargin(Integer.parseInt(args[++i]));
                         case BACKGROUND_MAP_VISIBILITY -> cfg.backgroundMapVisibility(Float.parseFloat(args[++i]));
@@ -455,6 +456,19 @@ public final class CommandLineConfigurationFactory {
                     .formatted(languageTag, optionArgument(Option.INFORMATION_LOCALE)));
         }
         return canonical;
+    }
+
+    private static String parseInformationTimeZone(@NotNull final String zoneId,
+                                                   @NotNull final ResourceBundle resourceBundle) throws UserException {
+        if (zoneId.isBlank()) {
+            return "";
+        }
+        try {
+            return ZoneId.of(zoneId.trim()).getId();
+        } catch (final DateTimeException e) {
+            throw new UserException(resourceBundle.getString("cli.error.timezone")
+                    .formatted(zoneId, optionArgument(Option.INFORMATION_TIME_ZONE)), e);
+        }
     }
 
     private static String optionArgument(@NotNull final Option option) {

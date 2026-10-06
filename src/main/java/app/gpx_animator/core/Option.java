@@ -86,6 +86,7 @@ public enum Option {
     INFORMATION_POSITION("information-position"),
     INFORMATION_MARGIN("information-margin"),
     INFORMATION_LOCALE("information-locale"),
+    INFORMATION_TIME_ZONE("information-timezone"),
     COMMENT_POSITION("comment-position"),
     COMMENT_MARGIN("comment-margin"),
     PHOTO_DIR("photo-dir"),

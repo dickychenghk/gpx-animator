@@ -20,6 +20,7 @@ For questions and support requests, please use
 * Add map layers: separate multiple TMS URL templates with `|` to draw them on top of each other
 * Add built-in Hong Kong Lands Department background maps (imagery or basemap with Chinese or English labels)
 * Add a locale for the information overlay so date, time, speed and coordinates can use another region than the system locale; the command line option is `--information-locale`
+* Add a time zone for the information overlay so date and time can use another zone than the computer, including daylight saving for region ids; the command line option is `--information-timezone`
 
 ### Fixes
 
