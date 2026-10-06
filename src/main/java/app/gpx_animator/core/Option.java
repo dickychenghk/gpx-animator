@@ -85,6 +85,7 @@ public enum Option {
     INFORMATION("information"),
     INFORMATION_POSITION("information-position"),
     INFORMATION_MARGIN("information-margin"),
+    INFORMATION_LOCALE("information-locale"),
     COMMENT_POSITION("comment-position"),
     COMMENT_MARGIN("comment-margin"),
     PHOTO_DIR("photo-dir"),

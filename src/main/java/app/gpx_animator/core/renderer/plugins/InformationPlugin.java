@@ -31,13 +31,15 @@ import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.text.DateFormat;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 // Plugins are loaded using reflection
 @SuppressWarnings("unused")
 public final class InformationPlugin extends TextRenderer implements RendererPlugin {
 
-    private final DateFormat dateFormat = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM);
+    private final DateFormat dateFormat;
+    private final Locale locale;
 
     private final String information;
     private final Position position;
@@ -56,6 +58,8 @@ public final class InformationPlugin extends TextRenderer implements RendererPlu
 
     public InformationPlugin(@NonNull final Configuration configuration) {
         super(configuration.getFont());
+        this.locale = configuration.resolveInformationLocale();
+        this.dateFormat = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM, locale);
         this.information = configuration.getInformation();
         this.position = configuration.getInformationPosition();
         this.margin = configuration.getInformationMargin();
@@ -120,7 +124,7 @@ public final class InformationPlugin extends TextRenderer implements RendererPlu
     private String getLatLonString(@NonNull final Point2D point) {
         if (point instanceof GpxPoint gpxPoint) {
             final var trackPoint = gpxPoint.getTrackPoint();
-            return String.format("%.4f, %.4f", trackPoint.getLatitude(), trackPoint.getLongitude()); //NON-NLS
+            return String.format(locale, "%.4f, %.4f", trackPoint.getLatitude(), trackPoint.getLongitude()); //NON-NLS
         } else {
             return "";
         }
@@ -130,11 +134,11 @@ public final class InformationPlugin extends TextRenderer implements RendererPlu
         if (point instanceof GpxPoint gpxPoint) {
             final var speed = calculateSpeedForDisplay(gpxPoint, time, frame);
             if (speedUnit.isDisplayMinutes()) {
-                final var format = "%d:%02d %s";
-                return format.formatted((int) speed, (int) ((speed - (int) speed) * 60), speedUnit.getAbbreviation()); // Display minutes and seconds
+                final var format = "%d:%02d %s"; //NON-NLS
+                return String.format(locale, format, (int) speed, (int) ((speed - (int) speed) * 60), speedUnit.getAbbreviation());
             } else {
                 final var format = speed > 10 ? "%.0f %s" : "%.1f %s"; // with 1 decimal below 10, no decimals 10 and above
-                return format.formatted(speed, speedUnit.getAbbreviation());
+                return String.format(locale, format, speed, speedUnit.getAbbreviation());
             }
         } else {
             return "";

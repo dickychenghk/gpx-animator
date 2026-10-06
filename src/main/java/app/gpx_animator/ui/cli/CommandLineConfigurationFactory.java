@@ -109,6 +109,7 @@ public final class CommandLineConfigurationFactory {
                         case INFORMATION -> cfg.information(String.valueOf(args[++i]));
                         case INFORMATION_POSITION -> cfg.informationPosition(Position.parse(args[++i]));
                         case INFORMATION_MARGIN -> cfg.informationMargin(Integer.parseInt(args[++i]));
+                        case INFORMATION_LOCALE -> cfg.informationLocale(parseInformationLocale(args[++i], resourceBundle));
                         case COMMENT_POSITION -> cfg.commentPosition(Position.parse(args[++i]));
                         case COMMENT_MARGIN -> cfg.commentMargin(Integer.parseInt(args[++i]));
                         case BACKGROUND_MAP_VISIBILITY -> cfg.backgroundMapVisibility(Float.parseFloat(args[++i]));
@@ -444,6 +445,16 @@ public final class CommandLineConfigurationFactory {
         } catch (final DateTimeException e) {
             throw new UserException(resourceBundle.getString("cli.error.datetime").formatted(value, optionArgument(option)), e);
         }
+    }
+
+    private static String parseInformationLocale(@NotNull final String languageTag,
+                                                 @NotNull final ResourceBundle resourceBundle) throws UserException {
+        final var canonical = Configuration.canonicalInformationLocale(languageTag);
+        if (canonical == null) {
+            throw new UserException(resourceBundle.getString("cli.error.locale")
+                    .formatted(languageTag, optionArgument(Option.INFORMATION_LOCALE)));
+        }
+        return canonical;
     }
 
     private static String optionArgument(@NotNull final Option option) {

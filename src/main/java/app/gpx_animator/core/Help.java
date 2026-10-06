@@ -24,6 +24,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.io.PrintWriter;
 import java.time.ZoneId;
+import java.util.Locale;
 
 
 public final class Help {
@@ -64,6 +65,8 @@ public final class Help {
         w.writeOptionHelp(Option.INFORMATION, "text", false, cfg.getInformation().replace("\n", "\\n")); //NON-NLS
         w.writeOptionHelp(Option.INFORMATION_POSITION, "information-position", false, cfg.getInformationPosition());
         w.writeOptionHelp(Option.INFORMATION_MARGIN, "information-margin", false, cfg.getInformationMargin()); //NON-NLS
+        w.writeOptionHelp(Option.INFORMATION_LOCALE, "locale", false,
+                cfg.getInformationLocale().isBlank() ? Locale.getDefault().toLanguageTag() : cfg.getInformationLocale()); //NON-NLS
         w.writeOptionHelp(Option.COMMENT_POSITION, "comment-position", false, cfg.getCommentPosition());
         w.writeOptionHelp(Option.COMMENT_MARGIN, "comment-margin", false, cfg.getCommentMargin()); //NON-NLS
         w.writeOptionHelp(Option.TRACK_ICON, "trackIcon", true, tc.getTrackIcon()); //NON-NLS

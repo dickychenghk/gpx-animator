@@ -32,13 +32,16 @@ import jakarta.xml.bind.annotation.XmlElementWrapper;
 import jakarta.xml.bind.annotation.XmlRootElement;
 import jakarta.xml.bind.annotation.XmlTransient;
 import jakarta.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+import org.jetbrains.annotations.Nullable;
 
 import java.awt.Color;
 import java.awt.Font;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.ResourceBundle;
 import java.util.stream.Collectors;
 
@@ -106,6 +109,7 @@ public final class Configuration {
     private Position attributionPosition = DEFAULT_ATTRIBUTION_POSITION;
     private int attributionMargin = DEFAULT_MARGIN;
     private String information = DEFAULT_INFORMATION;
+    private String informationLocale = "";
     private Position informationPosition = Position.BOTTOM_RIGHT;
     private int informationMargin = DEFAULT_MARGIN;
     private Position commentPosition = Position.BOTTOM_CENTER;
@@ -162,7 +166,8 @@ public final class Configuration {
             final boolean skipIdle, final Color backgroundColor, final File backgroundImage, final Color flashbackColor,
             final Long flashbackDuration, final boolean preDrawTrack, final Long keepFirstFrame, final Long keepLastFrame, final File output,
             final VideoCodec videoCodec, final MusicCodec musicCodec, final File inputMusic, final String attribution, final String information,
-            final SpeedUnit speedUnit, final Font font, final Double markerSize, final Font waypointFont, final Double waypointSize,
+            final String informationLocale, final SpeedUnit speedUnit, final Font font, final Double markerSize, final Font waypointFont,
+            final Double waypointSize,
             final Double minLon, final Double maxLon, final Double minLat, final Double maxLat,
             final File logo, final Position logoPosition, final int logoMargin,
             final Position attributionPosition, final int attributionMargin,
@@ -203,6 +208,7 @@ public final class Configuration {
         this.inputMusic = validateFile(inputMusic);
         this.attribution = attribution;
         this.information = information;
+        this.informationLocale = informationLocale == null ? "" : informationLocale;
         this.font = font;
         this.markerSize = markerSize;
         this.waypointFont = waypointFont;
@@ -369,6 +375,37 @@ public final class Configuration {
 
     public String getInformation() {
         return information;
+    }
+
+    public String getInformationLocale() {
+        return informationLocale == null ? "" : informationLocale;
+    }
+
+    public Locale resolveInformationLocale() {
+        if (getInformationLocale().isBlank()) {
+            return Locale.getDefault();
+        }
+        return Locale.forLanguageTag(getInformationLocale().replace('_', '-'));
+    }
+
+    /**
+     * Returns the canonical BCP 47 tag when {@code languageTag} matches an available locale.
+     * A blank tag means the system locale and is returned unchanged. An unknown tag returns {@code null}.
+     */
+    public static @Nullable String canonicalInformationLocale(@Nullable final String languageTag) {
+        if (languageTag == null || languageTag.isBlank()) {
+            return "";
+        }
+        final var parsed = Locale.forLanguageTag(languageTag.trim().replace('_', '-'));
+        if (parsed.getLanguage().isEmpty()) {
+            return null;
+        }
+        final var requested = parsed.toLanguageTag();
+        return Arrays.stream(Locale.getAvailableLocales())
+                .map(Locale::toLanguageTag)
+                .filter(tag -> tag.equalsIgnoreCase(requested))
+                .findFirst()
+                .orElse(null);
     }
 
     public Font getFont() {
@@ -571,6 +608,7 @@ public final class Configuration {
         private Position attributionPosition = Position.BOTTOM_LEFT;
         private int attributionMargin = DEFAULT_MARGIN;
         private String information = DEFAULT_INFORMATION;
+        private String informationLocale = "";
         private Position informationPosition = Position.BOTTOM_RIGHT;
         private int informationMargin = DEFAULT_MARGIN;
         private Position commentPosition = Position.BOTTOM_CENTER;
@@ -593,7 +631,7 @@ public final class Configuration {
                     backgroundMapVisibility, tmsUrlTemplate, tmsApiKey, tmsUserAgent,
                     skipIdle, backgroundColor, backgroundImage, flashbackColor, flashbackDuration,
                     preDrawTrack, keepFirstFrame, keepLastFrame, output, videoCodec, musicCodec, inputMusic, attribution, information,
-                    speedUnit, font, markerSize, waypointFont, waypointSize,
+                    informationLocale, speedUnit, font, markerSize, waypointFont, waypointSize,
                     minLon, maxLon, minLat, maxLat,
                     logo, logoPosition, logoMargin,
                     attributionPosition, attributionMargin,
@@ -759,6 +797,11 @@ public final class Configuration {
 
         public Builder information(final String information) {
             this.information = information;
+            return this;
+        }
+
+        public Builder informationLocale(final String informationLocale) {
+            this.informationLocale = informationLocale == null ? "" : informationLocale;
             return this;
         }
 

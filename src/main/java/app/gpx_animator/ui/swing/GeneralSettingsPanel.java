@@ -140,6 +140,7 @@ abstract class GeneralSettingsPanel extends JPanel {
     private final JSpinner photoAnimationDurationSpinner;
     private final JTextArea attributionTextArea;
     private final JTextArea informationTextArea;
+    private final InformationLocaleCombo informationLocaleComboBox;
     private final JSpinner maxLatSpinner;
     private final JSpinner minLonSpinner;
     private final JSpinner maxLonSpinner;
@@ -155,7 +156,7 @@ abstract class GeneralSettingsPanel extends JPanel {
     })
     GeneralSettingsPanel() {
         var rowCounter = 0;
-        final var maxRows = 49;
+        final var maxRows = 50;
 
         setBorder(new EmptyBorder(5, 5, 5, 5));
         final var gridBagLayout = new GridBagLayout();
@@ -1309,6 +1310,25 @@ abstract class GeneralSettingsPanel extends JPanel {
             }
         });
 
+        final var lblInformationLocale = new JLabel(resourceBundle.getString("ui.panel.generalsettings.informationLocale.label"));
+        final var gbcLabelInformationLocale = new GridBagConstraints();
+        gbcLabelInformationLocale.anchor = GridBagConstraints.LINE_END;
+        gbcLabelInformationLocale.insets = new Insets(0, 0, 5, 5);
+        gbcLabelInformationLocale.gridx = 0;
+        gbcLabelInformationLocale.gridy = ++rowCounter;
+        add(lblInformationLocale, gbcLabelInformationLocale);
+
+        informationLocaleComboBox = new InformationLocaleCombo(
+                resourceBundle.getString("ui.panel.generalsettings.informationLocale.system"),
+                Option.INFORMATION_LOCALE.getHelp() + " "
+                        + resourceBundle.getString("ui.panel.generalsettings.informationLocale.search"),
+                this::configurationChanged);
+        final var gbcInformationLocale = new GridBagConstraints();
+        gbcInformationLocale.fill = GridBagConstraints.HORIZONTAL;
+        gbcInformationLocale.gridx = 1;
+        gbcInformationLocale.gridy = rowCounter;
+        add(informationLocaleComboBox, gbcInformationLocale);
+
         final var lblInformationPosition = new JLabel(resourceBundle.getString("ui.panel.generalsettings.informationPosition.label"));
         final var gbcLabelInfoPosition = new GridBagConstraints();
         gbcLabelInfoPosition.anchor = GridBagConstraints.LINE_END;
@@ -1586,6 +1606,7 @@ abstract class GeneralSettingsPanel extends JPanel {
         tmsUserAgent.setText(c.getTmsUserAgent());
 
         informationTextArea.setText(c.getInformation());
+        informationLocaleComboBox.setLanguageTag(c.getInformationLocale());
         attributionTextArea.setText(c.getAttribution());
         SwingUtilities.invokeLater(() ->
                 checkAttributionMandatory(attributionLocationComboBox.getSelectedItem(), tmsUrlTemplateComboBox.getSelectedItem()));
@@ -1675,6 +1696,7 @@ abstract class GeneralSettingsPanel extends JPanel {
                 .photoTime((Long) photoTimeSpinner.getValue())
                 .photoAnimationDuration((Long) photoAnimationDurationSpinner.getValue())
                 .information(informationTextArea.getText())
+                .informationLocale(informationLocaleComboBox.getLanguageTag())
                 .attribution(attribution)
                 .attributionPosition((Position) attributionLocationComboBox.getSelectedItem())
                 .speedUnit(speedUnit)
