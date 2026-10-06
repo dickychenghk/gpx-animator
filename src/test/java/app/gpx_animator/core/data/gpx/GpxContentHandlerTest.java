@@ -44,4 +44,20 @@ class GpxContentHandlerTest {
         }
     }
 
+    @Test
+    void testMultipleTracksParsing() throws IOException, UserException {
+        final var contentHandler = new GpxContentHandler();
+        try (InputStream is = getClass().getResourceAsStream("/gpx/multitrack.gpx")) {
+            GpxParser.parseGpx(is, contentHandler);
+
+            final var track = contentHandler.getTrack();
+            assertNotNull(track);
+
+            final var trackSegments = track.getTrackSegments();
+            assertEquals(2, trackSegments.size());
+            assertEquals(2, trackSegments.get(0).getTrackPoints().size());
+            assertEquals(3, trackSegments.get(1).getTrackPoints().size());
+        }
+    }
+
 }

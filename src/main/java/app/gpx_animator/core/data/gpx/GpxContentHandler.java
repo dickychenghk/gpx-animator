@@ -66,7 +66,10 @@ public final class GpxContentHandler extends DefaultHandler {
             final GPX gpxElement = GPX.getElement(qName);
             final CharacterConsumer consumer = switch (gpxElement) {
                 case TRACK -> {
-                    track = new Track();
+                    // a GPX file can contain several tracks, the segments of all of them are kept
+                    if (track == null) {
+                        track = new Track();
+                    }
                     yield NoOpConsumer.INSTANCE;
                 }
                 case TRACK_POINT -> {

@@ -25,6 +25,15 @@ class GpxParserTest {
     }
 
     @Test
+    void readTrackTimeRangeOfMultipleTracks() throws UserException, URISyntaxException {
+        final var timeRange = GpxParser.readTrackTimeRange(resourceFile("/gpx/multitrack.gpx"));
+
+        assertEquals(Optional.of(new GpxParser.TimeRange(
+                Instant.parse("2019-10-22T14:36:00Z").toEpochMilli(),
+                Instant.parse("2019-10-23T09:02:00Z").toEpochMilli())), timeRange);
+    }
+
+    @Test
     void readTrackTimeRangeWithoutTimestamps() throws UserException, URISyntaxException {
         assertEquals(Optional.empty(), GpxParser.readTrackTimeRange(resourceFile("/gpx/notime.gpx")));
     }

@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<gpx version="1.1"
+     creator="GPX Animator"
+     xmlns="http://www.topografix.com/GPX/1/1"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <trk>
+    <name>First day</name>
+    <trkseg>
+      <trkpt lat="35.7804" lon="-121.3298">
+        <time>2019-10-22T14:36:00Z</time>
+      </trkpt>
+      <trkpt lat="35.7803" lon="-121.3297">
+        <time>2019-10-22T14:37:00Z</time>
+      </trkpt>
+    </trkseg>
+  </trk>
+  <trk>
+    <name>Second day</name>
+    <trkseg>
+      <trkpt lat="36.5552" lon="-121.9233">
+        <time>2019-10-23T09:00:00Z</time>
+      </trkpt>
+      <trkpt lat="36.5553" lon="-121.9234">
+        <time>2019-10-23T09:01:00Z</time>
+      </trkpt>
+      <trkpt lat="36.5554" lon="-121.9235">
+        <time>2019-10-23T09:02:00Z</time>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>

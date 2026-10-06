@@ -759,7 +759,7 @@ public final class Renderer {
 
                 final var trackIcon = trackConfiguration.getTrackIcon();
                 final var trackIconFile = trackConfiguration.getInputIcon();
-                if (trackIconFile != null && trackIconFile.exists() && trackIconFile.canRead()) {
+                if (trackIconFile != null && trackIconFile.isFile() && trackIconFile.canRead()) {
                     try {
                         drawIconFileOnGraphics2D(point, g2, trackIconFile, trackConfiguration.isTrackIconMirrored());
                     } catch (final IOException e) {
